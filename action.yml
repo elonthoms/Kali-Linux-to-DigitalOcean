@@ -1,5 +1,5 @@
 name: "Kali Linux to DigitalOcean"
-description: "Downloads, converts, and uploads the latest Kali Linux Generic Cloud Image to DigitalOcean Custom Images."
+description: "Downloads, converts, and uploads the latest Kali Linux NetInstaller Image to DigitalOcean Custom Images."
 branding:
   icon: 'arrow-up-circle'
   color: 'blue'
@@ -22,25 +22,28 @@ runs:
 
     - name: Fetch Latest Kali Linux Version
       run: |
-        URL=$(curl -s https://kali.download/cloud-images/current/ | grep -oE 'kali-linux-[0-9]+\.[0-9]+[a-z]?-cloud-genericcloud-amd64.tar.xz' | head -n 1)
+        # 匹配 NetInstaller 的 .iso 文件名
+        URL=$(curl -s https://kali.download/cloud-images/current/ | grep -oE 'kali-linux-[0-9]+\.[0-9]+[a-z]?-installer-netinst-amd64\.iso' | head -n 1)
         FULL_URL="https://kali.download/cloud-images/current/$URL"
         KALI_VERSION=$(echo $URL | grep -oE '[0-9]+\.[0-9]+[a-z]?')
         echo "KALI_VERSION=$KALI_VERSION" >> $GITHUB_ENV
         echo "IMAGE_URL=$FULL_URL" >> $GITHUB_ENV
 
-    - name: Download Kali Linux Image
+    - name: Download Kali Linux NetInstaller Image
       run: wget ${{ env.IMAGE_URL }}
 
-    - name: Extract Image
-      run: tar -xvf kali-linux-${{ env.KALI_VERSION }}-cloud-genericcloud-amd64.tar.xz
+    # 注意：NetInstaller 是 .iso，无需解压步骤，原 "Extract Image" 步骤已删除
 
     - name: Compress Image to gzip
-      run: gzip -c disk.raw > disk.raw.gz
+      # 将下载的 .iso 直接重命名为 disk.raw 以适配原压缩流程
+      run: |
+        mv kali-linux-${{ env.KALI_VERSION }}-installer-netinst-amd64.iso disk.raw
+        gzip -c disk.raw > disk.raw.gz
 
     - name: Versioning
       run: |
         if [ ! -f version.txt ]; then
-          NEW_VERSION="${{ inputs.release_tag_prefix }}-v1.0.0"  # Set NEW_VERSION for the first run with prefix
+          NEW_VERSION="${{ inputs.release_tag_prefix }}-v1.0.0"
           echo "$NEW_VERSION" > version.txt
         else
           VERSION=$(cat version.txt)
@@ -56,7 +59,7 @@ runs:
         git config user.name "github-actions[bot]"
         git config user.email "github-actions[bot]@users.noreply.github.com"
         git add version.txt
-        git commit -m "Update version to ${{ env.NEW_VERSION }} - Kali Linux ${{ env.KALI_VERSION }}"
+        git commit -m "Update version to ${{ env.NEW_VERSION }} - Kali Linux ${{ env.KALI_VERSION }} NetInstaller"
         git push
 
     - name: Create Release
@@ -75,10 +78,10 @@ runs:
         -H "Authorization: Bearer ${{ inputs.DIGITALOCEAN_ACCESS_TOKEN }}" \
         -H "Content-Type: application/json" \
         -d "{
-              \"name\": \"Kali Linux ${{ env.KALI_VERSION }} from GitHub Actions\",
+              \"name\": \"Kali Linux ${{ env.KALI_VERSION }} NetInstaller from GitHub Actions\",
               \"url\": \"https://github.com/${{ github.repository }}/releases/download/${{ env.NEW_VERSION }}/disk.raw.gz\",
               \"distribution\": \"Debian\",
               \"region\": \"${{ inputs.REGION }}\",
-              \"description\": \"Kali Linux\",
-              \"tags\": [\"kali\"]
+              \"description\": \"Kali Linux NetInstaller\",
+              \"tags\": [\"kali\", \"netinst\"]
             }"
